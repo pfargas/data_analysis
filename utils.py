@@ -6,38 +6,57 @@ import csv
 from qvarnet import load_model_from_results
 import matplotlib.pyplot as plt
 import numpy as np
+from time import time
+from tqdm import tqdm
+
+
+def get_metrics_files(root_dir):
+    root = Path(root_dir)
+
+    files = []
+    for run in tqdm(root.iterdir()):
+        if not run.is_dir():
+            continue
+
+        nested = run / run.name / "metrics.json"
+        if nested.exists():
+            files.append(nested)
+
+    return files
 
 
 def load_simulation_results(root_dir):
     all_runs = []
 
+    start_time = time()
     # 1. Setup FileSystem
-    files = list(Path(root_dir).rglob("metrics.json"))
+    files = get_metrics_files(root_dir)
+    end_time = time()
+    print(f"Found {len(files)} simulation results in {end_time - start_time} seconds.")
 
     # 2. Process Files
-    for file_path in files:
+    start_time = time()
+    for file_path in tqdm(files):
         str_path = str(file_path)
         folder = os.path.dirname(str_path)
         config_path = os.path.join(folder, "config.json")
 
         # Helper to handle local
-        def open_file(p):
-            return open(p, "r")
-
         try:
-            with open_file(str_path) as f:
+            with open(str_path) as f:
                 metrics = json.load(f)
 
             config = {}
-            exists = os.path.exists(config_path)
-
-            if exists:
-                with open_file(config_path) as f:
-                    config = json.load(f)
+            with open(config_path, "r") as f:
+                config = json.load(f)
 
             all_runs.append({**config, **metrics, "path": folder})
         except Exception as e:
             print(f"Skipping {folder} due to error: {e}")
+    end_time = time()
+    print(
+        f"Processed {len(all_runs)} simulation results in {end_time - start_time} seconds."
+    )
 
     df = pd.json_normalize(all_runs, sep="_")
     return df
